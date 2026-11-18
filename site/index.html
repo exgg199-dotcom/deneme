@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Yapay Zeka</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #16181d; --muted: #6b7280;
+    --line: #e5e7eb; --accent: #6d4aff; --accent-text: #fff; --user: #ece8ff;
+    --code-bg: #0f1115; --code-text: #e6e6e6; --danger: #d92d20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #181b21; --text: #eceef2; --muted: #9aa1ad;
+      --line: #2a2f38; --accent: #8b6dff; --accent-text: #fff; --user: #2a2350;
+      --code-bg: #0a0b0e; --code-text: #e6e6e6; --danger: #ff6b5e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; height: 100dvh;
+  }
+  header {
+    padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+    font-weight: 700; font-size: 18px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .page { display: none; padding: 16px; max-width: 760px; margin: 0 auto; }
+  .page.active { display: block; }
+  nav {
+    display: flex; border-top: 1px solid var(--line); background: var(--panel);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: 0; color: var(--muted); padding: 8px 0 6px;
+    font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  nav button .ic { font-size: 22px; line-height: 1; }
+  nav button.active { color: var(--accent); font-weight: 600; }
+  h2 { margin: 4px 0 12px; font-size: 20px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 12px 0 6px; }
+  textarea, input, select {
+    width: 100%; font: inherit; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--accent); color: var(--accent-text); border: 0; border-radius: 12px;
+    padding: 12px 18px; font: inherit; font-weight: 600; margin-top: 12px; width: 100%;
+    text-decoration: none;
+  }
+  .btn.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .btn:disabled { opacity: .5; }
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font: inherit; font-size: 14px;
+  }
+  .seg button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-top: 16px; }
+  .err { color: var(--danger); font-size: 14px; margin-top: 10px; white-space: pre-wrap; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .ok { color: #16a34a; font-size: 14px; margin-top: 8px; }
+  img.result, video.result { width: 100%; border-radius: 12px; display: block; }
+  progress { width: 100%; height: 8px; margin-top: 12px; accent-color: var(--accent); }
+
+  /* Sohbet */
+  #chat { display: none; flex-direction: column; height: 100%; padding: 0; max-width: 760px; margin: 0 auto; }
+  #chat.active { display: flex; }
+  #msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 92%; padding: 10px 14px; border-radius: 16px; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--user); white-space: pre-wrap; }
+  .msg.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); }
+  .msg.assistant p:first-child { margin-top: 0; } .msg.assistant p:last-child { margin-bottom: 0; }
+  .codewrap { margin: 8px 0; border-radius: 10px; overflow: hidden; background: var(--code-bg); }
+  .codebar { display: flex; align-items: center; gap: 12px; padding: 6px 10px; font-size: 12px; color: #aaa; background: #000; }
+  .codebar span { flex: 1; }
+  .codebar button { background: none; border: 0; color: #c9bcff; font: inherit; font-size: 12px; padding: 4px; }
+  .codewrap pre { margin: 0; padding: 10px; overflow-x: auto; color: var(--code-text); font-size: 13px; }
+  .msg :not(pre) > code { background: rgba(127,127,127,.18); padding: 1px 5px; border-radius: 5px; font-size: 90%; }
+  .composer { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+  .composer textarea { min-height: 44px; max-height: 160px; border-radius: 22px; padding: 10px 16px; resize: none; }
+  .composer button {
+    flex: 0 0 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent);
+    color: #fff; font-size: 20px; align-self: flex-end;
+  }
+  .empty { color: var(--muted); text-align: center; margin: auto; padding: 24px; }
+  .empty b { display: block; color: var(--text); font-size: 22px; margin-bottom: 6px; }
+  .filelist a { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--accent); text-decoration: none; }
+  .dots::after { content: "…"; animation: d 1s steps(3) infinite; }
+  @keyframes d { 0% { content: "."; } 33% { content: ".."; } 66% { content: "..."; } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+</head>
+<body>
+<header id="title">💬 Sohbet</header>
+
+<main>
+  <!-- SOHBET -->
+  <section id="chat" class="active">
+    <div id="msgs">
+      <div class="empty" id="empty"><b>Merhaba! 👋</b>Soru sor, kod yazdır, metin hazırlat.<br>Örnek: “Python ile basit bir hesap makinesi yaz”</div>
+    </div>
+    <div class="composer">
+      <textarea id="chatIn" rows="1" placeholder="Bir şey sor…"></textarea>
+      <button id="chatBtn" aria-label="Gönder">↑</button>
+    </div>
+  </section>
+
+  <!-- FOTOĞRAF -->
+  <section class="page" id="image">
+    <h2>Fotoğraf oluştur</h2>
+    <label for="imgPrompt">Ne çizilsin?</label>
+    <textarea id="imgPrompt" placeholder="Ör. gün batımında İstanbul Boğazı, yağlı boya tablo"></textarea>
+    <label>Boyut</label>
+    <div class="seg" id="imgSize">
+      <button data-v="1024x1024" class="on">Kare</button>
+      <button data-v="1024x1536">Dikey</button>
+      <button data-v="1536x1024">Yatay</button>
+    </div>
+    <button class="btn" id="imgBtn">Fotoğraf oluştur</button>
+    <div class="err" id="imgErr"></div>
+    <div id="imgOut"></div>
+  </section>
+
+  <!-- VİDEO -->
+  <section class="page" id="video">
+    <h2>Video oluştur</h2>
+    <label for="vidPrompt">Nasıl bir video?</label>
+    <textarea id="vidPrompt" placeholder="Ör. karlı ormanda koşan bir tilki, sinematik çekim"></textarea>
+    <label>Süre</label>
+    <div class="seg" id="vidSec">
+      <button data-v="4" class="on">4 sn</button><button data-v="8">8 sn</button><button data-v="12">12 sn</button>
+    </div>
+    <label>Yön</label>
+    <div class="seg" id="vidSize">
+      <button data-v="720x1280" class="on">Dikey</button><button data-v="1280x720">Yatay</button>
+    </div>
+    <button class="btn" id="vidBtn">Video oluştur</button>
+    <div class="hint">Birkaç dakika sürebilir, bu sayfayı açık tut. En fazla 100 MB.</div>
+    <div id="vidProg"></div>
+    <div class="err" id="vidErr"></div>
+    <div id="vidOut"></div>
+  </section>
+
+  <!-- DOSYA -->
+  <section class="page" id="file">
+    <h2>Dosya oluştur</h2>
+    <label for="filePrompt">Hangi dosyayı oluşturayım?</label>
+    <textarea id="filePrompt" placeholder="Ör. 10 öğrencilik not tablosu (CSV) ya da kişisel web sayfası (HTML)"></textarea>
+    <button class="btn" id="fileBtn">Dosya oluştur</button>
+    <div class="err" id="fileErr"></div>
+    <div id="fileOut"></div>
+    <div class="card">
+      <b>Bu oturumda oluşturulanlar</b>
+      <div class="filelist" id="fileList"><div class="hint">Henüz dosya yok</div></div>
+    </div>
+  </section>
+
+  <!-- AYARLAR -->
+  <section class="page" id="settings">
+    <h2>Ayarlar</h2>
+    <label for="kAnth">Anthropic (Claude) API anahtarı — sohbet, kod, dosya</label>
+    <input id="kAnth" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="hint">console.anthropic.com → API Keys</div>
+    <label for="kOai">OpenAI API anahtarı — fotoğraf ve video</label>
+    <input id="kOai" type="password" placeholder="sk-…" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="hint">platform.openai.com/api-keys (video için Sora erişimi gerekir)</div>
+    <button class="btn" id="saveKeys">Kaydet</button>
+    <div id="keyMsg"></div>
+    <div class="card hint">
+      Anahtarlar yalnızca <b>bu telefonun tarayıcısında</b> saklanır, başka bir yere gönderilmez
+      (sadece Anthropic ve OpenAI'ye istek yaparken kullanılır). Ücretler kendi hesaplarına yansır.
+      Bu linki başkasıyla paylaşırsan onlar kendi anahtarlarını girmek zorundadır.
+    </div>
+    <button class="btn secondary" id="clearChat">Sohbeti temizle</button>
+  </section>
+</main>
+
+<nav id="tabs">
+  <button data-tab="chat" class="active"><span class="ic">💬</span>Sohbet</button>
+  <button data-tab="image"><span class="ic">🖼️</span>Fotoğraf</button>
+  <button data-tab="video"><span class="ic">🎬</span>Video</button>
+  <button data-tab="file"><span class="ic">📄</span>Dosya</button>
+  <button data-tab="settings"><span class="ic">⚙️</span>Ayarlar</button>
+</nav>
+
+<script type="module">
+import Anthropic from "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.4.0/+esm";
+
+const MODEL = "claude-opus-5-5";
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const $ = (id) => document.getElementById(id);
+
+/* ---------- Depolama (tarayıcı engellerse sessizce geç) ---------- */
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } },
+  set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} },
+};
+
+/* ---------- Sekmeler ---------- */
+const titles = { chat: "💬 Sohbet", image: "🖼️ Fotoğraf", video: "🎬 Video", file: "📄 Dosya", settings: "⚙️ Ayarlar" };
+function showTab(name) {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll("main > section").forEach(s => s.classList.toggle("active", s.id === name));
+  $("title").textContent = titles[name];
+}
+$("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) showTab(b.dataset.tab); });
+
+document.querySelectorAll(".seg").forEach(seg => seg.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+}));
+const segVal = (id) => $(id).querySelector(".on").dataset.v;
+
+/* ---------- Ayarlar ---------- */
+$("kAnth").value = store.get("anthropic_key");
+$("kOai").value = store.get("openai_key");
+$("saveKeys").onclick = () => {
+  store.set("anthropic_key", $("kAnth").value.trim());
+  store.set("openai_key", $("kOai").value.trim());
+  $("keyMsg").innerHTML = '<div class="ok">Kaydedildi ✅</div>';
+};
+if (!store.get("anthropic_key") && !store.get("openai_key")) showTab("settings");
+
+function claude() {
+  const apiKey = store.get("anthropic_key");
+  if (!apiKey) throw new Error("Anthropic API anahtarı yok. Ayarlar sekmesinden ekle.");
+  // Anahtar kullanıcının kendi tarayıcısında durduğu için doğrudan tarayıcıdan çağrı yapılıyor.
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+}
+function openaiKey() {
+  const k = store.get("openai_key");
+  if (!k) throw new Error("OpenAI API anahtarı yok. Ayarlar sekmesinden ekle.");
+  return k;
+}
+function errText(e) {
+  if (e instanceof Anthropic.AuthenticationError) return "Claude anahtarı geçersiz. Ayarlardan kontrol et.";
+  if (e instanceof Anthropic.RateLimitError) return "Çok fazla istek / kredi bitti. Biraz bekle ya da hesabına bakiye ekle.";
+  if (e instanceof Anthropic.APIError) return `Claude hatası (${e.status ?? "?"}): ${e.error?.error?.message ?? e.message}`;
+  return e?.message || String(e);
+}
+
+/* ---------- Dosya yardımcıları ---------- */
+const madeFiles = [];
+function addFile(name, blob) {
+  const url = URL.createObjectURL(blob);
+  madeFiles.unshift({ name, url });
+  $("fileList").innerHTML = madeFiles.map(f => `<a href="${f.url}" download="${escapeAttr(f.name)}">⬇️ ${escapeHtml(f.name)}</a>`).join("");
+  return url;
+}
+function download(name, blob) {
+  const url = addFile(name, blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.appendChild(a); a.click(); a.remove();
+}
+const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const escapeAttr = escapeHtml;
+const extFor = (lang) => ({ python: "py", py: "py", swift: "swift", javascript: "js", js: "js", typescript: "ts", ts: "ts",
+  html: "html", css: "css", json: "json", java: "java", kotlin: "kt", c: "c", cpp: "cpp", "c++": "cpp", csharp: "cs",
+  cs: "cs", go: "go", rust: "rs", bash: "sh", sh: "sh", shell: "sh", sql: "sql", php: "php", ruby: "rb",
+  markdown: "md", md: "md", xml: "xml", yaml: "yml", csv: "csv" }[(lang || "").toLowerCase()] || "txt");
+
+/* ---------- SOHBET ---------- */
+const SYSTEM = "Sen Türkçe konuşan, yardımsever bir yapay zeka asistanısın. Kullanıcı hangi dilde yazarsa o dilde cevap ver. " +
+  "Soruları net ve doğru cevapla. Kod istenirse çalışan, açıklamalı kod yaz ve kodu dil etiketiyle ``` blokları içine koy. " +
+  "Kullanıcı telefondan yazıyor; cevapları gereksiz uzatma.";
+let history = [];
+let busy = false;
+let currentStream = null;
+
+function renderMarkdown(el, text) {
+  el.innerHTML = DOMPurify.sanitize(marked.parse(text));
+  el.querySelectorAll("pre > code").forEach(code => {
+    const pre = code.parentElement;
+    const lang = (code.className.match(/language-([\w+#-]+)/) || [])[1] || "";
+    const wrap = document.createElement("div");
+    wrap.className = "codewrap";
+    wrap.innerHTML = `<div class="codebar"><span>${escapeHtml(lang || "kod")}</span><button data-a="copy">Kopyala</button><button data-a="save">Dosya yap</button></div>`;
+    pre.replaceWith(wrap); wrap.appendChild(pre);
+    wrap.querySelector('[data-a="copy"]').onclick = async (e) => {
+      try { await navigator.clipboard.writeText(code.textContent); e.target.textContent = "Kopyalandı ✓"; } catch { e.target.textContent = "Kopyalanamadı"; }
+    };
+    wrap.querySelector('[data-a="save"]').onclick = () =>
+      download(`kod-${Date.now()}.${extFor(lang)}`, new Blob([code.textContent], { type: "text/plain" }));
+  });
+}
+
+function addBubble(role, text) {
+  $("empty")?.remove();
+  const el = document.createElement("div");
+  el.className = `msg ${role}`;
+  if (role === "user") el.textContent = text; else el.innerHTML = '<span class="dots">Düşünüyor</span>';
+  $("msgs").appendChild(el);
+  el.scrollIntoView({ block: "end" });
+  return el;
+}
+
+async function sendChat() {
+  if (busy) { currentStream?.abort(); return; }
+  const text = $("chatIn").value.trim();
+  if (!text) return;
+  let client;
+  try { client = claude(); } catch (e) { alert(e.message); showTab("settings"); return; }
+
+  $("chatIn").value = ""; autoGrow();
+  addBubble("user", text);
+  history.push({ role: "user", content: text });
+  const bubble = addBubble("assistant");
+  busy = true; $("chatBtn").textContent = "■";
+
+  let acc = "";
+  try {
+    const stream = client.beta.messages.stream({
+      model: MODEL,
+      max_tokens: 64000,
+      system: SYSTEM,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium" },
+      // Güvenlik sınıflandırıcısı reddederse sunucu aynı istekte yedek modelle devam eder.
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      messages: history,
+    });
+    currentStream = stream;
+    let scheduled = false;
+    stream.on("text", (delta) => {
+      acc += delta;
+      if (!scheduled) {
+        scheduled = true;
+        requestAnimationFrame(() => { scheduled = false; renderMarkdown(bubble, acc); bubble.scrollIntoView({ block: "end" }); });
+      }
+    });
+    const final = await stream.finalMessage();
+    if (final.stop_reason === "refusal") acc += "\n\n> ⚠️ Bu istek güvenlik nedeniyle yanıtlanamadı.";
+    if (final.stop_reason === "max_tokens") acc += "\n\n> ⚠️ Cevap uzunluk sınırına ulaştı.";
+    // Sonraki tur için asistanın tam içeriğini (thinking blokları dahil) geri gönderiyoruz.
+    history.push({ role: "assistant", content: final.content });
+    renderMarkdown(bubble, acc || "_(boş cevap)_");
+  } catch (e) {
+    if (e instanceof Anthropic.APIUserAbortError) {
+      if (acc) { history.push({ role: "assistant", content: acc }); renderMarkdown(bubble, acc + "\n\n_(durduruldu)_"); }
+      else { bubble.remove(); history.pop(); }
+    } else {
+      bubble.innerHTML = `<div class="err">${escapeHtml(errText(e))}</div>`;
+      history.pop(); // başarısız soruyu geçmişten çıkar, tekrar sorulabilsin
+      $("chatIn").value = text;
+    }
+  } finally {
+    busy = false; currentStream = null; $("chatBtn").textContent = "↑";
+  }
+}
+$("chatBtn").onclick = sendChat;
+$("chatIn").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && !/iPhone|iPad|Android/i.test(navigator.userAgent)) { e.preventDefault(); sendChat(); }
+});
+function autoGrow() { const t = $("chatIn"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; }
+$("chatIn").addEventListener("input", autoGrow);
+$("clearChat").onclick = () => {
+  history = [];
+  $("msgs").innerHTML = '<div class="empty" id="empty"><b>Merhaba! 👋</b>Yeni sohbet başladı.</div>';
+  showTab("chat");
+};
+
+/* ---------- FOTOĞRAF ---------- */
+$("imgBtn").onclick = async () => {
+  const prompt = $("imgPrompt").value.trim();
+  if (!prompt) return;
+  $("imgErr").textContent = ""; $("imgOut").innerHTML = "";
+  const btn = $("imgBtn"); btn.disabled = true; btn.innerHTML = '<span class="dots">Oluşturuluyor</span>';
+  try {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${openaiKey()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "gpt-image-1", prompt, size: segVal("imgSize"), n: 1 }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`OpenAI hatası (${res.status}): ${data.error?.message ?? "bilinmiyor"}`);
+    const b64 = data.data?.[0]?.b64_json;
+    if (!b64) throw new Error("Fotoğraf verisi gelmedi.");
+    const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
+    const name = `foto-${Date.now()}.png`;
+    const url = addFile(name, blob);
+    $("imgOut").innerHTML = `<div class="card"><img class="result" src="${url}" alt="Oluşturulan fotoğraf">
+      <a class="btn" href="${url}" download="${name}">⬇️ İndir</a>
+      <div class="hint">iPhone'da fotoğrafa basılı tutup “Fotoğraflara Ekle” diyerek galeriye kaydedebilirsin.</div></div>`;
+  } catch (e) {
+    $("imgErr").textContent = errText(e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Fotoğraf oluştur";
+  }
+};
+
+/* ---------- VİDEO ---------- */
+$("vidBtn").onclick = async () => {
+  const prompt = $("vidPrompt").value.trim();
+  if (!prompt) return;
+  $("vidErr").textContent = ""; $("vidOut").innerHTML = "";
+  const btn = $("vidBtn"); btn.disabled = true; btn.innerHTML = '<span class="dots">Çalışıyor</span>';
+  const setProg = (p, t) => $("vidProg").innerHTML = `<progress max="100" value="${p}"></progress><div class="hint">${t}</div>`;
+  setProg(0, "Sıraya alınıyor…");
+  try {
+    const key = openaiKey();
+    const auth = { "Authorization": `Bearer ${key}` };
+    const form = new FormData();
+    form.append("model", "sora-2");
+    form.append("prompt", prompt);
+    form.append("seconds", segVal("vidSec"));
+    form.append("size", segVal("vidSize"));
+    let res = await fetch("https://api.openai.com/v1/videos", { method: "POST", headers: auth, body: form });
+    let job = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`OpenAI hatası (${res.status}): ${job.error?.message ?? "bilinmiyor"}`);
+
+    while (job.status !== "completed") {
+      if (job.status === "failed") throw new Error(`Video oluşturulamadı: ${job.error?.message ?? "bilinmeyen hata"}`);
+      setProg(job.progress ?? 0, job.status === "queued" ? "Sırada bekliyor…" : `Oluşturuluyor… %${job.progress ?? 0}`);
+      await new Promise(r => setTimeout(r, 5000));
+      res = await fetch(`https://api.openai.com/v1/videos/${job.id}`, { headers: auth });
+      job = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`OpenAI hatası (${res.status}): ${job.error?.message ?? "bilinmiyor"}`);
+    }
+
+    setProg(100, "İndiriliyor…");
+    res = await fetch(`https://api.openai.com/v1/videos/${job.id}/content`, { headers: auth });
+    if (!res.ok) throw new Error(`Video indirilemedi (HTTP ${res.status}).`);
+    const len = Number(res.headers.get("content-length") || 0);
+    if (len > MAX_VIDEO_BYTES) throw new Error(`Video ${(len / 1048576).toFixed(1)} MB — 100 MB sınırını aşıyor. Daha kısa süre seç.`);
+    const blob = await res.blob();
+    if (blob.size > MAX_VIDEO_BYTES) throw new Error(`Video ${(blob.size / 1048576).toFixed(1)} MB — 100 MB sınırını aşıyor. Daha kısa süre seç.`);
+
+    const name = `video-${Date.now()}.mp4`;
+    const url = addFile(name, new Blob([blob], { type: "video/mp4" }));
+    $("vidProg").innerHTML = "";
+    $("vidOut").innerHTML = `<div class="card"><video class="result" src="${url}" controls playsinline autoplay muted loop></video>
+      <div class="hint">Boyut: ${(blob.size / 1048576).toFixed(1)} MB</div>
+      <a class="btn" href="${url}" download="${name}">⬇️ İndir</a></div>`;
+  } catch (e) {
+    $("vidProg").innerHTML = "";
+    $("vidErr").textContent = errText(e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Video oluştur";
+  }
+};
+
+/* ---------- DOSYA ---------- */
+$("fileBtn").onclick = async () => {
+  const request = $("filePrompt").value.trim();
+  if (!request) return;
+  $("fileErr").textContent = ""; $("fileOut").innerHTML = "";
+  const btn = $("fileBtn"); btn.disabled = true; btn.innerHTML = '<span class="dots">Hazırlanıyor</span>';
+  try {
+    const stream = claude().beta.messages.stream({
+      model: MODEL,
+      max_tokens: 64000,
+      system: "Kullanıcının tarif ettiği dosyayı oluştur. Uygun bir dosya adı ve uzantı seç (metin tabanlı biçimler: " +
+        "txt, md, csv, json, html, css, js, py, swift, xml vb.). İçerik eksiksiz ve doğrudan kullanılabilir olsun.",
+      output_config: {
+        effort: "medium",
+        format: {
+          type: "json_schema",
+          schema: {
+            type: "object",
+            properties: {
+              filename: { type: "string", description: "Uzantısıyla dosya adı, ör. rapor.md, veriler.csv, index.html" },
+              content: { type: "string", description: "Dosyanın tam içeriği" },
+            },
+            required: ["filename", "content"],
+            additionalProperties: false,
+          },
+        },
+      },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      messages: [{ role: "user", content: request }],
+    });
+    const final = await stream.finalMessage();
+    if (final.stop_reason === "refusal") throw new Error("Bu istek güvenlik nedeniyle yanıtlanamadı.");
+    if (final.stop_reason === "max_tokens") throw new Error("Dosya çok uzun, sınır aşıldı. Daha kısa bir dosya iste.");
+    const json = final.content.filter(b => b.type === "text").map(b => b.text).join("");
+    let file;
+    try { file = JSON.parse(json); } catch { throw new Error("Dosya çıktısı okunamadı, tekrar dene."); }
+    const name = (file.filename || "dosya.txt").replace(/[\\/]/g, "-");
+    const type = name.endsWith(".html") ? "text/html" : name.endsWith(".csv") ? "text/csv" : name.endsWith(".json") ? "application/json" : "text/plain";
+    const url = addFile(name, new Blob([file.content], { type: type + ";charset=utf-8" }));
+    $("fileOut").innerHTML = `<div class="card"><b>${escapeHtml(name)}</b>
+      <div class="codewrap" style="margin-top:10px"><pre style="max-height:320px">${escapeHtml(file.content)}</pre></div>
+      <a class="btn" href="${url}" download="${escapeAttr(name)}">⬇️ İndir</a>
+      <button class="btn secondary" id="copyFile">Kopyala</button></div>`;
+    $("copyFile").onclick = async (e) => {
+      try { await navigator.clipboard.writeText(file.content); e.target.textContent = "Kopyalandı ✓"; } catch {}
+    };
+  } catch (e) {
+    $("fileErr").textContent = errText(e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Dosya oluştur";
+  }
+};
+</script>
+</body>
+</html>

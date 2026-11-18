@@ -1,4 +1,12 @@
-# Yapay Zeka — iOS Uygulaması
+# Yapay Zeka
+
+## 🌐 Web sitesi (telefondan kullanım)
+
+`site/index.html` — tek dosyalık, telefona uygun site. Sohbet/kod/dosya için Claude Opus 5.5, fotoğraf için `gpt-image-1`, video için `sora-2` (en fazla 100 MB). Herhangi bir statik barındırmaya (Netlify, GitHub Pages) yüklenebilir; API anahtarları Ayarlar sekmesinden girilir ve yalnızca tarayıcıda saklanır.
+
+---
+
+## 📱 iOS Uygulaması (Mac + Xcode gerekir)
 
 SwiftUI ile yazılmış, hepsi bir arada yapay zeka uygulaması (iOS 17+).
 
