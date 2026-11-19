@@ -97,4 +97,15 @@ final class ContainerManager {
 
         return URL(fileURLWithPath: path, isDirectory: true)
     }
+
+    func findEngineCommon(root: URL) throws -> URL {
+        let candidate = root
+            .appendingPathComponent("Documents")
+            .appendingPathComponent("Engine")
+            .appendingPathComponent("Common")
+        guard FileManager.default.fileExists(atPath: candidate.path) else {
+            throw ContainerManagerError.queryFailed
+        }
+        return candidate
+    }
 }

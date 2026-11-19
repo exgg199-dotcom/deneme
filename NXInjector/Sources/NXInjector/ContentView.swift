@@ -14,11 +14,10 @@ struct ContentView: View {
     @State private var shareItems: [Any] = []
 
     private let hwid = HWIDManager.shared.hwid
-    private let targetBundle = "com.sandboxol.blockmango"
 
     var body: some View {
         ZStack {
-            backgroundTexture
+            backgroundLayer
 
             ScrollView {
                 VStack(spacing: 20) {
@@ -44,24 +43,21 @@ struct ContentView: View {
         }
     }
 
-    private var backgroundTexture: some View {
+    private var backgroundLayer: some View {
         ZStack {
-            Color(red: 0.05, green: 0.05, blue: 0.08)
-            GeometryReader { geo in
-                Canvas { context, size in
-                    for x in stride(from: 0, to: size.width, by: 4) {
-                        for y in stride(from: 0, to: size.height, by: 4) {
-                            let noise = sin(x * 0.3) * cos(y * 0.3)
-                            if noise > 0.5 {
-                                context.fill(
-                                    Path(CGRect(x: x, y: y, width: 1, height: 1)),
-                                    with: .color(Color.white.opacity(0.015))
-                                )
-                            }
+            Color(red: 0.04, green: 0.04, blue: 0.07)
+            Canvas { context, size in
+                for x in stride(from: 0, to: size.width, by: 3) {
+                    for y in stride(from: 0, to: size.height, by: 3) {
+                        let v = sin(x * 0.25 + 1.3) * cos(y * 0.25 + 0.7)
+                        if v > 0.6 {
+                            context.fill(
+                                Path(CGRect(x: x, y: y, width: 1.5, height: 1.5)),
+                                with: .color(Color.white.opacity(0.018))
+                            )
                         }
                     }
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
             }
         }
         .ignoresSafeArea()
@@ -72,9 +68,12 @@ struct ContentView: View {
             Text("NX Injector")
                 .font(.system(size: 28, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
-            Text("Blockman GO Resource Injector")
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
+            Text("Blockman GO Resource Mod")
+                .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(Color(red: 0.4, green: 0.6, blue: 1.0))
+            Text("TrollStore only · Stock iOS · No jailbreak")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.gray)
         }
         .padding(.top, 16)
     }
@@ -85,7 +84,7 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundColor(.gray)
 
-            HStack {
+            HStack(spacing: 10) {
                 Text(hwid)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white)
@@ -96,27 +95,23 @@ struct ContentView: View {
 
                 Button {
                     UIPasteboard.general.string = hwid
-                    logAppend("HWID copied to clipboard")
+                    logAppend("HWID copied")
                 } label: {
-                    Image(systemName: "doc.on.doc")
-                        .foregroundColor(.blue)
+                    Image(systemName: "doc.on.doc").foregroundColor(.blue)
                 }
 
                 Button {
                     shareItems = [hwid]
                     showShareSheet = true
                 } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundColor(.blue)
+                    Image(systemName: "square.and.arrow.up").foregroundColor(.blue)
                 }
             }
             .padding(10)
             .background(Color.white.opacity(0.05))
             .cornerRadius(8)
         }
-        .padding(12)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(12)
+        .cardStyle()
     }
 
     private var licenseSection: some View {
@@ -158,9 +153,7 @@ struct ContentView: View {
                     .foregroundColor(isActivated ? .green : .red)
             }
         }
-        .padding(12)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(12)
+        .cardStyle()
     }
 
     private var zipSection: some View {
@@ -174,7 +167,7 @@ struct ContentView: View {
             } label: {
                 HStack {
                     Image(systemName: "folder.badge.plus")
-                    Text(selectedZipURL?.lastPathComponent ?? "Select .zip file")
+                    Text(selectedZipURL?.lastPathComponent ?? "Pick mod .zip (e.g. common_1.zip)")
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -185,29 +178,34 @@ struct ContentView: View {
                 .foregroundColor(selectedZipURL == nil ? .gray : .white)
             }
         }
-        .padding(12)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(12)
+        .cardStyle()
     }
 
     private var injectSection: some View {
-        Button(action: performInjection) {
-            HStack {
-                if isInjecting {
-                    ProgressView().tint(.white)
-                } else {
-                    Image(systemName: "arrow.down.app.fill")
+        VStack(spacing: 8) {
+            Button(action: performInjection) {
+                HStack {
+                    if isInjecting {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "arrow.down.app.fill")
+                    }
+                    Text(isInjecting ? "Injecting..." : "Inject")
                 }
-                Text(isInjecting ? "Injecting..." : "Inject")
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(canInject ? Color(red: 0.55, green: 0.1, blue: 0.85) : Color.gray.opacity(0.3))
+                .cornerRadius(12)
+                .foregroundColor(.white)
+                .font(Font.headline.weight(.bold))
             }
-            .frame(maxWidth: .infinity)
-            .padding(14)
-            .background(canInject ? Color(red: 0.6, green: 0.1, blue: 0.9) : Color.gray.opacity(0.3))
-            .cornerRadius(12)
-            .foregroundColor(.white)
-            .font(Font.headline.weight(.bold))
+            .disabled(!canInject)
+
+            Text("After injecting, fully close and relaunch Blockman GO.")
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
         }
-        .disabled(!canInject)
     }
 
     private var canInject: Bool {
@@ -216,28 +214,46 @@ struct ContentView: View {
 
     private var logSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Log", systemImage: "terminal")
-                .font(.caption)
-                .foregroundColor(.gray)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(logLines.indices, id: \.self) { idx in
-                        Text(logLines[idx])
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(logLines[idx].contains("FAIL") ? .red : logLines[idx].contains("OK") ? .green : .gray)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+            HStack {
+                Label("Log", systemImage: "terminal")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                Spacer()
+                if !logLines.isEmpty {
+                    Button("Clear") { logLines = [] }
+                        .font(.caption2)
+                        .foregroundColor(.gray)
                 }
-                .padding(8)
             }
-            .frame(minHeight: 120, maxHeight: 200)
-            .background(Color.black.opacity(0.4))
-            .cornerRadius(8)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(logLines.indices, id: \.self) { idx in
+                            Text(logLines[idx])
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(lineColor(logLines[idx]))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(idx)
+                        }
+                    }
+                    .padding(8)
+                }
+                .frame(minHeight: 120, maxHeight: 200)
+                .background(Color.black.opacity(0.4))
+                .cornerRadius(8)
+                .onChange(of: logLines.count) { count in
+                    if count > 0 { proxy.scrollTo(count - 1) }
+                }
+            }
         }
-        .padding(12)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(12)
+        .cardStyle()
+    }
+
+    private func lineColor(_ line: String) -> Color {
+        if line.contains("FAIL") || line.contains("error") { return .red }
+        if line.contains("OK") || line.contains("Done") || line.contains("activated") { return .green }
+        return .gray
     }
 
     private func logAppend(_ line: String) {
@@ -256,7 +272,7 @@ struct ContentView: View {
                 await MainActor.run {
                     isActivated = resp.ok
                     activationStatus = resp.message
-                    logAppend(resp.ok ? "License activated: \(resp.message)" : "Activation failed: \(resp.message)")
+                    logAppend(resp.ok ? "License activated: \(resp.message)" : "FAIL: \(resp.message)")
                     isActivating = false
                 }
             } catch {
@@ -270,32 +286,19 @@ struct ContentView: View {
     }
 
     private func performInjection() {
-        guard let zipURL = selectedZipURL else { return }
-        guard isActivated else {
-            logAppend("FAIL: License not activated")
-            return
-        }
-
+        guard let zipURL = selectedZipURL, isActivated else { return }
         isInjecting = true
-        logAppend("Resolving container for \(targetBundle)...")
+        logAppend("Resolving Blockman GO container...")
 
         Task {
             do {
-                let containerURL = try ContainerManager.shared.resolveDataContainer(bundleID: targetBundle)
-                await MainActor.run { logAppend("Container: \(containerURL.path)") }
-
-                let results = try await UnzipHelper.inject(zipURL: zipURL, into: containerURL)
-
+                let results = try await Injector.shared.installPicked(url: zipURL)
                 await MainActor.run {
                     for r in results {
-                        if r.success {
-                            logAppend("OK \(r.path)")
-                        } else {
-                            logAppend("FAIL \(r.path): \(r.error ?? "unknown")")
-                        }
+                        logAppend(r.success ? "OK \(r.path)" : "FAIL \(r.path): \(r.error ?? "")")
                     }
-                    let okCount = results.filter { $0.success }.count
-                    logAppend("Done — \(okCount)/\(results.count) files injected")
+                    let ok = results.filter { $0.success }.count
+                    logAppend("Done — \(ok)/\(results.count) files. Fully close and relaunch Blockman GO.")
                     isInjecting = false
                 }
             } catch {
@@ -305,6 +308,14 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+private extension View {
+    func cardStyle() -> some View {
+        self.padding(12)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(12)
     }
 }
 
@@ -319,17 +330,11 @@ struct DocumentPicker: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
         let parent: DocumentPicker
-
-        init(_ parent: DocumentPicker) {
-            self.parent = parent
-        }
-
+        init(_ parent: DocumentPicker) { self.parent = parent }
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
             parent.selectedURL = urls.first
         }
@@ -338,10 +343,8 @@ struct DocumentPicker: UIViewControllerRepresentable {
 
 struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
-
     func makeUIViewController(context: Context) -> UIActivityViewController {
         UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
     }
-
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
