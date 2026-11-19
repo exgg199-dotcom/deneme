@@ -1,56 +1,53 @@
-# Yapay Zeka
+# NX Injector
 
-## 🌐 Web sitesi (telefondan kullanım)
+iOS resource injector for Blockman GO (com.sandboxol.blockmango).  
+Targets TrollStore / ldid-signed environments on jailbroken devices.
 
-`docs/index.html` — tek dosyalık, telefona uygun site. Sohbet/kod/dosya için Claude Opus 5.5, fotoğraf için `gpt-image-1`, video için `sora-2` (en fazla 100 MB). Herhangi bir statik barındırmaya (Netlify, GitHub Pages) yüklenebilir; API anahtarları Ayarlar sekmesinden girilir ve yalnızca tarayıcıda saklanır.
+## Building
 
----
+GitHub Actions builds an unsigned IPA on every push.  
+Download the `NXInjector-unsigned-ipa` artifact from the Actions tab.
 
-## 📱 iOS Uygulaması (Mac + Xcode gerekir)
+## Signing (phone-side)
 
-SwiftUI ile yazılmış, hepsi bir arada yapay zeka uygulaması (iOS 17+).
+### TrollStore
+1. Download the IPA to your device (Safari, Files, AirDrop).
+2. Open TrollStore → tap **+** → select the IPA.
+3. TrollStore signs it with the private entitlements embedded in the IPA.
 
-| Sekme | Ne yapar | Kullanılan model |
-|---|---|---|
-| 💬 Sohbet | Soru-cevap, kod yazma (kod bloklarını kopyala / dosya yap) | Claude Opus 5.5 (`claude-opus-5-5`) |
-| 🖼️ Fotoğraf | Yazıdan fotoğraf üretir, galeriye kaydeder | OpenAI `gpt-image-1` |
-| 🎬 Video | Yazıdan 4/8/12 sn video üretir, **en fazla 100 MB** | OpenAI `sora-2` |
-| 📄 Dosya | İstediğin dosyayı oluşturur (txt, md, csv, json, html, py…) | Claude Opus 5.5 |
-| ⚙️ Ayarlar | API anahtarları (Keychain'de saklanır) | — |
-
-## Kurulum (Mac + Xcode 15 veya üstü gerekir)
-
-1. XcodeGen kur: `brew install xcodegen`
-2. Projeyi oluştur:
-   ```bash
-   cd YapayZeka
-   xcodegen generate
-   open YapayZeka.xcodeproj
-   ```
-3. Xcode'da **Signing & Capabilities** → kendi Apple hesabını (Team) seç.
-4. iPhone'u bağla ya da simülatör seç → ▶️ Çalıştır.
-5. Uygulamada **Ayarlar** sekmesine anahtarlarını gir:
-   - Claude: <https://console.anthropic.com> → API Keys
-   - OpenAI: <https://platform.openai.com/api-keys> (video için Sora erişimi gerekir)
-
-## Notlar
-
-- Kullanım ücretlidir; ücretler kendi Anthropic / OpenAI hesaplarına yansır. Video üretimi en pahalısıdır.
-- Video 100 MB'ı aşarsa silinir ve hata gösterilir (720p, 12 sn'lik videolar normalde bu sınırın çok altındadır).
-- Oluşturulan dosyalar uygulamanın Belgeler klasörüne kaydedilir ve **Dosyalar** uygulamasında görünür.
-- Anahtarlar uygulamanın içinde saklandığı için bu yapı kişisel kullanım içindir. App Store'a
-  yayınlayacaksan anahtarları kendi sunucunda tutup istekleri oradan geçirmelisin.
-
-## Dosya yapısı
-
+### ldid (SSH / terminal)
+```bash
+ldid -SNXInjector/Resources/NXInjector.entitlements NXInjector.app/NXInjector
 ```
-YapayZeka/
-├── project.yml              # XcodeGen proje tanımı
-└── Sources/
-    ├── App/YapayZekaApp.swift
-    ├── Services/
-    │   ├── ClaudeService.swift   # Claude: streaming sohbet + yapılandırılmış dosya çıktısı
-    │   ├── OpenAIService.swift   # Fotoğraf + video (100 MB sınırı) + dosya kaydetme
-    │   └── KeyStore.swift        # Keychain
-    └── Views/                    # Sohbet, Fotoğraf, Video, Dosya, Ayarlar ekranları
-```
+
+### KSign / ESign
+Import the unsigned IPA, sign with any certificate, install.  
+Private entitlements (`com.apple.private.*`) only activate under TrollStore or ldid.
+
+## Entitlements note
+
+The entitlements plist requests private Apple entitlements:
+
+| Key | Purpose |
+|-----|---------|
+| `com.apple.private.security.no-container` | Run outside sandbox |
+| `com.apple.private.security.storage.AppDataContainers` | Read/write other app containers |
+| `com.apple.private.security.storage.MobileDocuments` | iCloud Documents access |
+
+These are **ignored** by the App Store and by standard ad-hoc signing.  
+They only take effect when signed with TrollStore or ldid on a jailbroken device.
+
+## Licensing
+
+The app requires a valid `NX-XXXXX-XXXXX-XXXXX` license key.  
+Set your activation endpoint in `LicenseClient.swift` → `endpoint`.
+
+## Container access
+
+Uses `libsystem_containermanager.dylib` via `dlopen` to resolve  
+`/var/mobile/Containers/Data/Application/<UUID>` for Blockman GO and  
+activates a sandbox extension token so writes are permitted.
+
+Tested path on iOS 15–16. iOS 17+ may require a different approach  
+if `container_object_copy_sandbox_token` is unavailable; the app  
+shows a clear error in that case.

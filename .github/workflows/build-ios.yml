@@ -1,0 +1,68 @@
+name: Build NXInjector IPA
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project NXInjector.xcodeproj \
+            -scheme NXInjector \
+            -clonedSourcePackagesDirPath SourcePackages
+
+      - name: Build unsigned IPA
+        id: build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project NXInjector.xcodeproj \
+            -scheme NXInjector \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            -clonedSourcePackagesDirPath SourcePackages \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            2>&1 | tee build_output.txt || (cp build_output.txt error.txt && exit 1)
+
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -name "*.app" | head -1)
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r NXInjector-unsigned.ipa Payload
+          echo "IPA size: $(du -sh NXInjector-unsigned.ipa | cut -f1)"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NXInjector-unsigned-ipa
+          path: NXInjector-unsigned.ipa
+          retention-days: 30
+
+      - name: Upload error log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-error-log
+          path: error.txt
+          retention-days: 7
