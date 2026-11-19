@@ -39,6 +39,10 @@ targets:
       - path: NXInjector/Sources/NXInjector
     resources:
       - path: NXInjector/Resources/Info.plist
+      - path: NXInjector/Resources/bg-texture.png
+      - path: NXInjector/Resources/AppIcon-1024.png
+      - path: NXInjector/Resources/AppIcon60x60@2x.png
+      - path: NXInjector/Resources/AppIcon60x60@3x.png
     settings:
       base:
         INFOPLIST_FILE: NXInjector/Resources/Info.plist
