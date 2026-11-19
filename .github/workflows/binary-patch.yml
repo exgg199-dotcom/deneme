@@ -69,31 +69,25 @@ jobs:
           file NXHook.dylib
           ls -lh NXHook.dylib
 
-      - name: Build insert_dylib from source
-        run: |
-          git clone --depth 1 https://github.com/Tyilo/insert_dylib.git insert_dylib_src
-          cd insert_dylib_src/insert_dylib
-          clang++ -std=c++14 \
-            -framework Foundation \
-            -o ../../insert_dylib_bin \
-            insert_dylib.mm
-          cd ../..
-          echo "insert_dylib built: $(./insert_dylib_bin --help 2>&1 | head -1 || true)"
-
       - name: Inject dylib load command into binary
         run: |
           BINARY="${{ env.BINARY }}"
           DYLIB_INSTALL_NAME="@executable_path/Frameworks/NXHook.dylib"
 
-          # Remove existing code signature first
+          echo "Before injection:"
+          otool -L "$BINARY" | tail -5
+
+          # Remove existing code signature (will be re-signed by KSign/ESign)
           codesign --remove-signature "$BINARY" 2>/dev/null || true
 
-          # Insert dylib
-          ./insert_dylib_bin --weak --no-strip-codesig \
-            "$DYLIB_INSTALL_NAME" "$BINARY" "$BINARY"
+          # Inject LC_LOAD_WEAK_DYLIB via self-contained Mach-O patcher
+          python3 NXHook/macho_inject.py "$BINARY" "$DYLIB_INSTALL_NAME"
 
-          echo "Load commands after injection:"
+          echo "After injection:"
           otool -L "$BINARY" | tail -10
+          echo "--- verifying load command present ---"
+          otool -l "$BINARY" | grep -A3 "NXHook.dylib" || \
+            (echo "ERROR: dylib load command not found after inject" && exit 1)
 
       - name: Place NXHook.dylib in Frameworks
         run: |
