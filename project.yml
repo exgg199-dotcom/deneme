@@ -1,0 +1,64 @@
+name: NXInjector
+options:
+  bundleIdPrefix: com.apple.mobile
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: com.apple.mobile.MobileHouseArrest
+    MARKETING_VERSION: 1.0
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: 5.9
+    IPHONEOS_DEPLOYMENT_TARGET: 15.0
+    TARGETED_DEVICE_FAMILY: 1
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    ENABLE_BITCODE: NO
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    INFOPLIST_FILE: NXInjector/Resources/Info.plist
+    CODE_SIGN_ENTITLEMENTS: NXInjector/Resources/NXInjector.entitlements
+    SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+    DEVELOPMENT_TEAM: NXTEAM
+
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation
+    from: 0.9.19
+
+targets:
+  NXInjector:
+    type: application
+    platform: iOS
+    sources:
+      - path: NXInjector/Sources/NXInjector
+    resources:
+      - path: NXInjector/Resources/Info.plist
+      - path: NXInjector/Resources/bg-texture.png
+      - path: NXInjector/Resources/AppIcon-1024.png
+      - path: NXInjector/Resources/AppIcon60x60@2x.png
+      - path: NXInjector/Resources/AppIcon60x60@3x.png
+    settings:
+      base:
+        INFOPLIST_FILE: NXInjector/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: NXInjector/Resources/NXInjector.entitlements
+    dependencies:
+      - package: ZIPFoundation
+    info:
+      path: NXInjector/Resources/Info.plist
+      properties: {}
+
+schemes:
+  NXInjector:
+    build:
+      targets:
+        NXInjector: all
+    run:
+      config: Debug
+    archive:
+      config: Release
