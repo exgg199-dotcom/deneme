@@ -1,0 +1,130 @@
+name: Repack Blockman GO IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Blockman GO IPA URL'
+        required: true
+        default: 'https://github.com/exgg199-dotcom/deneme/releases/download/1.21/com.sandboxol.blockmango_v3.31.1_und3fined.ipa'
+      mod_zip:
+        description: 'Mod ZIP filename in repo root (default: common_1.zip)'
+        required: false
+        default: 'common_1.zip'
+
+jobs:
+  repack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download Blockman GO IPA
+        run: |
+          echo "Downloading IPA..."
+          wget -q --show-progress -O blockman_go_orig.ipa "${{ github.event.inputs.ipa_url }}"
+          ls -lh blockman_go_orig.ipa
+
+      - name: Extract IPA
+        run: |
+          mkdir -p extracted
+          unzip -q blockman_go_orig.ipa -d extracted
+          APP=$(ls extracted/Payload/ | head -1)
+          echo "APP=$APP" >> $GITHUB_ENV
+          echo "Found app bundle: $APP"
+
+      - name: Dump app structure (3 levels deep)
+        run: |
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+          find "$APP_PATH" -maxdepth 3 -type d | sort > app_structure.txt
+          echo "=== Directory structure ===" && cat app_structure.txt
+          echo ""
+          echo "=== Lua files in bundle ==="
+          find "$APP_PATH" -name "*.lua" | sort | tee lua_files.txt
+          echo ""
+          echo "=== Top-level contents ==="
+          ls -la "$APP_PATH/"
+
+      - name: Extract mod zip
+        run: |
+          MOD_ZIP="${{ github.event.inputs.mod_zip }}"
+          if [ ! -f "$MOD_ZIP" ]; then
+            echo "ERROR: $MOD_ZIP not found in repo root"
+            ls *.zip 2>/dev/null || echo "No zip files found"
+            exit 1
+          fi
+          mkdir -p mod_files
+          unzip -q "$MOD_ZIP" -d mod_files
+          echo "=== Mod zip contents ==="
+          find mod_files -type f
+
+      - name: Inject mod files into bundle
+        run: |
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+
+          # Path 1: Unity StreamingAssets (Data/Raw)
+          if [ -d "$APP_PATH/Data/Raw" ]; then
+            echo "Injecting into Data/Raw (StreamingAssets)..."
+            find mod_files -type f | while read f; do
+              REL="${f#mod_files/}"
+              # strip leading directory component if present
+              BASENAME=$(echo "$REL" | sed 's|^[^/]*/||')
+              DST="$APP_PATH/Data/Raw/$BASENAME"
+              mkdir -p "$(dirname "$DST")"
+              cp "$f" "$DST"
+              echo "  WROTE: $DST"
+            done
+          fi
+
+          # Path 2: Documents/Engine/Common inside bundle
+          # (accessible via [NSBundle mainBundle].bundlePath + /Documents/Engine/Common)
+          mkdir -p "$APP_PATH/Documents/Engine/Common"
+          find mod_files -type f | while read f; do
+            REL="${f#mod_files/}"
+            BASENAME=$(echo "$REL" | sed 's|^[^/]*/||')
+            DST="$APP_PATH/Documents/Engine/Common/$BASENAME"
+            mkdir -p "$(dirname "$DST")"
+            cp "$f" "$DST"
+            echo "  WROTE: $DST"
+          done
+
+          # Path 3: Any existing Lua directory inside bundle
+          LUA_DIR=$(find "$APP_PATH" -name "*.lua" -maxdepth 6 | head -1 | xargs dirname 2>/dev/null)
+          if [ -n "$LUA_DIR" ] && [ "$LUA_DIR" != "$APP_PATH/Documents/Engine/Common" ]; then
+            echo "Injecting into existing Lua dir: $LUA_DIR"
+            find mod_files -name "*.lua" | while read f; do
+              cp "$f" "$LUA_DIR/"
+              echo "  WROTE: $LUA_DIR/$(basename $f)"
+            done
+          fi
+
+          echo "=== Injection complete ==="
+
+      - name: Repack IPA
+        run: |
+          cd extracted
+          zip -qr ../blockman_go_patched.ipa Payload
+          cd ..
+          ls -lh blockman_go_patched.ipa
+
+      - name: Upload patched IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockmanGO-patched-ipa
+          path: blockman_go_patched.ipa
+          retention-days: 7
+
+      - name: Upload structure dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-structure
+          path: |
+            app_structure.txt
+            lua_files.txt
+          retention-days: 7
+
+      - name: Upload error log on failure
+        if: failure()
+        run: |
+          ls -la extracted/Payload/ 2>&1 || true
