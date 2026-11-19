@@ -1,0 +1,208 @@
+name: Binary Patch Blockman GO (Dylib Inject)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Blockman GO IPA URL'
+        required: true
+        default: 'https://github.com/exgg199-dotcom/deneme/releases/download/1.21/com.sandboxol.blockmango_v3.31.1_und3fined.ipa'
+      mod_zip:
+        description: 'Mod ZIP filename in repo root'
+        required: false
+        default: 'common_1.zip'
+
+jobs:
+  patch:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download IPA
+        run: |
+          echo "Downloading IPA..."
+          curl -L -o blockman_go_orig.ipa "${{ github.event.inputs.ipa_url }}"
+          ls -lh blockman_go_orig.ipa
+
+      - name: Extract IPA
+        run: |
+          mkdir -p extracted
+          unzip -q blockman_go_orig.ipa -d extracted
+          APP=$(ls extracted/Payload/ | head -1)
+          echo "APP=$APP" >> $GITHUB_ENV
+          BIN_NAME="${APP%.app}"
+          echo "BIN_NAME=$BIN_NAME" >> $GITHUB_ENV
+          echo "Found: $APP / binary: $BIN_NAME"
+          ls -la "extracted/Payload/$APP/"
+
+      - name: Locate binary
+        run: |
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+          BIN="$APP_PATH/${{ env.BIN_NAME }}"
+          if [ ! -f "$BIN" ]; then
+            BIN=$(find "$APP_PATH" -maxdepth 1 -type f -not -name "*.plist" \
+              -not -name "*.png" -not -name "*.strings" -not -name "*.nib" | head -1)
+          fi
+          echo "BINARY=$BIN" >> $GITHUB_ENV
+          echo "Binary: $BIN"
+          file "$BIN"
+          ls -lh "$BIN"
+
+      - name: Write NXHook dylib source
+        run: |
+          cat > NXHook.c << 'CSRC'
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <CoreFoundation/CoreFoundation.h>
+
+static char g_engine_common[1024] = {0};
+
+static void __attribute__((constructor)) nx_init(void) {
+    CFBundleRef bundle = CFBundleGetMainBundle();
+    if (!bundle) return;
+    CFURLRef url = CFBundleCopyBundleURL(bundle);
+    if (!url) return;
+    char base[900] = {0};
+    CFURLGetFileSystemRepresentation(url, true, (UInt8 *)base, sizeof(base) - 1);
+    CFRelease(url);
+    snprintf(g_engine_common, sizeof(g_engine_common), "%s/Engine/Common", base);
+}
+
+static const char *redirect_read(const char *path) {
+    if (!path || !g_engine_common[0]) return path;
+    if (!strstr(path, "Engine/Common/")) return path;
+    const char *filename = strrchr(path, '/');
+    if (!filename) return path;
+    filename++;
+    static __thread char buf[1024];
+    snprintf(buf, sizeof(buf), "%s/%s", g_engine_common, filename);
+    int fd = open(buf, O_RDONLY);
+    if (fd >= 0) { close(fd); return buf; }
+    return path;
+}
+
+static FILE *nx_fopen(const char *path, const char *mode) {
+    if (mode && mode[0] == 'r')
+        return fopen(redirect_read(path), mode);
+    return fopen(path, mode);
+}
+
+static int nx_open(const char *path, int flags, ...) {
+    if ((flags & O_ACCMODE) == O_RDONLY)
+        return open(redirect_read(path), flags);
+    return open(path, flags);
+}
+
+typedef struct { void *new_fn; void *orig_fn; } interpose_t;
+__attribute__((used))
+static const interpose_t nx_interposers[]
+    __attribute__((section("__DATA,__interpose"))) = {
+    { (void *)nx_fopen, (void *)fopen },
+    { (void *)nx_open,  (void *)open  },
+};
+CSRC
+          echo "Hook source written."
+
+      - name: Compile NXHook.dylib for arm64 iOS
+        run: |
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK: $SDK"
+          clang -arch arm64 \
+            -isysroot "$SDK" \
+            -mios-version-min=15.0 \
+            -shared \
+            -framework CoreFoundation \
+            -o NXHook.dylib NXHook.c
+          file NXHook.dylib
+          ls -lh NXHook.dylib
+
+      - name: Build insert_dylib from source
+        run: |
+          git clone --depth 1 https://github.com/Tyilo/insert_dylib.git insert_dylib_src
+          cd insert_dylib_src/insert_dylib
+          clang++ -std=c++14 \
+            -framework Foundation \
+            -o ../../insert_dylib_bin \
+            insert_dylib.mm
+          cd ../..
+          echo "insert_dylib built: $(./insert_dylib_bin --help 2>&1 | head -1 || true)"
+
+      - name: Inject dylib load command into binary
+        run: |
+          BINARY="${{ env.BINARY }}"
+          DYLIB_INSTALL_NAME="@executable_path/Frameworks/NXHook.dylib"
+
+          # Remove existing code signature first
+          codesign --remove-signature "$BINARY" 2>/dev/null || true
+
+          # Insert dylib
+          ./insert_dylib_bin --weak --no-strip-codesig \
+            "$DYLIB_INSTALL_NAME" "$BINARY" "$BINARY"
+
+          echo "Load commands after injection:"
+          otool -L "$BINARY" | tail -10
+
+      - name: Place NXHook.dylib in Frameworks
+        run: |
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+          mkdir -p "$APP_PATH/Frameworks"
+          cp NXHook.dylib "$APP_PATH/Frameworks/"
+          echo "Dylib placed: $APP_PATH/Frameworks/NXHook.dylib"
+          ls -la "$APP_PATH/Frameworks/"
+
+      - name: Extract mod zip and place in Engine/Common
+        run: |
+          MOD_ZIP="${{ github.event.inputs.mod_zip }}"
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+
+          if [ ! -f "$MOD_ZIP" ]; then
+            echo "ERROR: $MOD_ZIP not found"
+            ls *.zip 2>/dev/null || echo "No zip files in repo root"
+            exit 1
+          fi
+
+          mkdir -p mod_files
+          unzip -q "$MOD_ZIP" -d mod_files
+          echo "Mod contents:"
+          find mod_files -type f
+
+          # Place directly into bundle Engine/Common (hook redirects reads here)
+          mkdir -p "$APP_PATH/Engine/Common"
+          find mod_files -type f | while read f; do
+            BASENAME=$(basename "$f")
+            DST="$APP_PATH/Engine/Common/$BASENAME"
+            cp "$f" "$DST"
+            echo "  WROTE: $DST"
+          done
+
+      - name: Strip code signature from dylib
+        run: |
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+          codesign --remove-signature "$APP_PATH/Frameworks/NXHook.dylib" 2>/dev/null || true
+          # Ad-hoc sign (KSign/ESign will re-sign the whole IPA)
+          codesign -f -s - "$APP_PATH/Frameworks/NXHook.dylib" 2>/dev/null || true
+
+      - name: Repack IPA
+        run: |
+          cd extracted
+          zip -qr ../blockman_go_patched.ipa Payload
+          cd ..
+          ls -lh blockman_go_patched.ipa
+
+      - name: Upload patched IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockmanGO-dylib-patched
+          path: blockman_go_patched.ipa
+          retention-days: 7
+
+      - name: Upload dylib for reference
+        uses: actions/upload-artifact@v4
+        with:
+          name: NXHook-dylib
+          path: NXHook.dylib
+          retention-days: 7
