@@ -148,7 +148,8 @@ struct ContentView: View {
                 .background(isActivated ? Color.green.opacity(0.7) : Color.blue.opacity(0.7))
                 .cornerRadius(10)
                 .foregroundColor(.white)
-                .font(.system(.body, weight: .semibold))
+                .font(.system(.body))
+                .fontWeight(.semibold)
             }
             .disabled(isActivating || licenseKey.isEmpty)
 
@@ -205,7 +206,8 @@ struct ContentView: View {
             .background(canInject ? Color(red: 0.6, green: 0.1, blue: 0.9) : Color.gray.opacity(0.3))
             .cornerRadius(12)
             .foregroundColor(.white)
-            .font(.system(.headline, weight: .bold))
+            .font(.system(.headline))
+            .fontWeight(.bold)
         }
         .disabled(!canInject)
     }
