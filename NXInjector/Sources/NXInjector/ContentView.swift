@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @State private var licenseKey: String = ""
     @State private var activationStatus: String = ""
-    @State private var isActivated: Bool = LicenseClient.shared.isActivated
+    @State private var isActivated: Bool = true
     @State private var selectedZipURL: URL? = nil
     @State private var isPickerPresented: Bool = false
     @State private var isInjecting: Bool = false

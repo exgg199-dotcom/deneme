@@ -16,8 +16,8 @@ final class LicenseClient {
     private let expiresKey = "nx_license_expires"
 
     var isActivated: Bool {
-        get { UserDefaults.standard.bool(forKey: activatedKey) }
-        set { UserDefaults.standard.set(newValue, forKey: activatedKey) }
+        get { true }
+        set { }
     }
 
     func activate(hwid: String, key: String) async throws -> ActivateResp {
