@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Download IPA
         run: |
           curl -L -o game.ipa "${{ github.event.inputs.ipa_url }}"
@@ -46,7 +49,7 @@ jobs:
           echo "" >> keys.txt
           echo "=== Any .strings mentioning the error (all langs) ===" >> keys.txt
           find ex/Payload/${{ env.APP }} -name '*.strings' | while read f; do
-            python3 -I NXHook/find_key.py "$f" >> keys.txt 2>/dev/null
+            python3 -I NXHook/find_key.py "$f" >> keys.txt 2>/dev/null || true
           done
           echo "" >> keys.txt
           echo "=== grep raw (utf16/utf8) for the phrase ===" >> keys.txt
