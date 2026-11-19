@@ -1,0 +1,107 @@
+name: Investigate Blockman GO Binary
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Blockman GO IPA URL'
+        required: true
+        default: 'https://github.com/exgg199-dotcom/deneme/releases/download/1.21/com.sandboxol.blockmango_v3.31.1_und3fined.ipa'
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download IPA
+        run: |
+          wget -q -O blockman_go.ipa "${{ github.event.inputs.ipa_url }}"
+
+      - name: Extract IPA
+        run: |
+          mkdir -p extracted
+          unzip -q blockman_go.ipa -d extracted
+          APP=$(ls extracted/Payload/ | head -1)
+          echo "APP=$APP" >> $GITHUB_ENV
+          echo "App bundle: $APP"
+
+      - name: Find main binary
+        run: |
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+          BIN_NAME="${{ env.APP }}"
+          BIN_NAME="${BIN_NAME%.app}"
+          if [ -f "$APP_PATH/$BIN_NAME" ]; then
+            echo "BINARY=$APP_PATH/$BIN_NAME" >> $GITHUB_ENV
+            echo "Binary: $APP_PATH/$BIN_NAME"
+            file "$APP_PATH/$BIN_NAME"
+            ls -lh "$APP_PATH/$BIN_NAME"
+          else
+            echo "Looking for binary..."
+            FOUND=$(find "$APP_PATH" -maxdepth 1 -type f -not -name "*.plist" -not -name "*.png" -not -name "*.strings" | head -1)
+            echo "BINARY=$FOUND" >> $GITHUB_ENV
+            echo "Binary: $FOUND"
+            file "$FOUND"
+          fi
+
+      - name: Dump file extensions inventory
+        run: |
+          APP_PATH="extracted/Payload/${{ env.APP }}"
+          echo "=== All file extensions in bundle ===" > file_inventory.txt
+          find "$APP_PATH" -type f | sed 's/.*\.//' | sort | uniq -c | sort -rn >> file_inventory.txt
+          echo "" >> file_inventory.txt
+          echo "=== .luac files ===" >> file_inventory.txt
+          find "$APP_PATH" -name "*.luac" >> file_inventory.txt
+          echo "=== .lua files ===" >> file_inventory.txt
+          find "$APP_PATH" -name "*.lua" >> file_inventory.txt
+          echo "=== .bytes files (Unity compressed) ===" >> file_inventory.txt
+          find "$APP_PATH" -name "*.bytes" | head -20 >> file_inventory.txt
+          cat file_inventory.txt
+
+      - name: Extract ARM64 slice for string analysis
+        run: |
+          BINARY="${{ env.BINARY }}"
+          # Check if fat binary, extract arm64 slice
+          if file "$BINARY" | grep -q "fat binary"; then
+            echo "Fat binary detected, extracting arm64 slice..."
+            lipo -extract arm64 "$BINARY" -output binary_arm64 2>/dev/null || cp "$BINARY" binary_arm64
+          else
+            cp "$BINARY" binary_arm64
+          fi
+          ls -lh binary_arm64
+
+      - name: Dump file path strings
+        run: |
+          echo "=== File path strings (Documents, Engine, Lua) ===" > paths_strings.txt
+          strings binary_arm64 | grep -iE '(Documents|Engine|Common|lua|update|hotfix|patch)' | sort -u >> paths_strings.txt
+          echo "" >> paths_strings.txt
+          echo "=== HTTP/HTTPS URLs ===" >> paths_strings.txt
+          strings binary_arm64 | grep -iE 'https?://' | sort -u >> paths_strings.txt
+          echo "" >> paths_strings.txt
+          echo "=== sandboxol / blockmango domains ===" >> paths_strings.txt
+          strings binary_arm64 | grep -iE '(sandboxol|blockmango|blockman|gverse)' | sort -u >> paths_strings.txt
+          echo "" >> paths_strings.txt
+          echo "=== CDN / update / download domains ===" >> paths_strings.txt
+          strings binary_arm64 | grep -iE '(cdn|update|download|patch|res\.|resource)' | sort -u | head -100 >> paths_strings.txt
+          cat paths_strings.txt
+
+      - name: Find patchable byte sequences
+        run: |
+          echo "=== 'Documents/Engine' in binary (hex offset) ===" > patch_targets.txt
+          grep -boa "Documents/Engine" binary_arm64 | head -20 >> patch_targets.txt
+          echo "" >> patch_targets.txt
+          echo "=== 'Engine/Common' in binary ===" >> patch_targets.txt
+          grep -boa "Engine/Common" binary_arm64 | head -20 >> patch_targets.txt
+          echo "" >> patch_targets.txt
+          echo "=== update domain occurrences ===" >> patch_targets.txt
+          strings binary_arm64 | grep -i 'update' | grep '\.' >> patch_targets.txt
+          cat patch_targets.txt
+
+      - name: Upload investigation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-investigation
+          path: |
+            paths_strings.txt
+            patch_targets.txt
+            file_inventory.txt
+          retention-days: 7
