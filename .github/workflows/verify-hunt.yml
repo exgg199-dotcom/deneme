@@ -1,0 +1,98 @@
+name: Hunt Integrity/Verification Logic
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Blockman GO IPA URL'
+        required: true
+        default: 'https://github.com/exgg199-dotcom/deneme/releases/download/1.21/com.sandboxol.blockmango_v3.31.1_und3fined.ipa'
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download IPA
+        run: |
+          curl -L -o game.ipa "${{ github.event.inputs.ipa_url }}"
+          ls -lh game.ipa
+
+      - name: Extract
+        run: |
+          mkdir -p ex
+          unzip -q game.ipa -d ex
+          APP=$(ls ex/Payload/ | head -1)
+          echo "APP=$APP" >> $GITHUB_ENV
+          BIN="${APP%.app}"
+          echo "BIN=$BIN" >> $GITHUB_ENV
+          echo "App: $APP  Binary: $BIN"
+
+      - name: Extract arm64 slice
+        run: |
+          B="ex/Payload/${{ env.APP }}/${{ env.BIN }}"
+          if file "$B" | grep -q "universal\|fat"; then
+            lipo -extract arm64 "$B" -output bin_arm64 2>/dev/null || cp "$B" bin_arm64
+          else
+            cp "$B" bin_arm64
+          fi
+          ls -lh bin_arm64
+          file bin_arm64
+
+      - name: Find Turkish localization key for the error
+        run: |
+          echo "=== .strings files (tr*) ===" > keys.txt
+          find ex/Payload/${{ env.APP }} -ipath '*tr*.lproj*' -name '*.strings' | tee -a keys.txt
+          echo "" >> keys.txt
+          echo "=== Any .strings mentioning the error (all langs) ===" >> keys.txt
+          find ex/Payload/${{ env.APP }} -name '*.strings' | while read f; do
+            python3 -I NXHook/find_key.py "$f" >> keys.txt 2>/dev/null
+          done
+          echo "" >> keys.txt
+          echo "=== grep raw (utf16/utf8) for the phrase ===" >> keys.txt
+          find ex/Payload/${{ env.APP }} -name '*.strings' | while read f; do
+            for enc in "" "-e l" "-e b"; do
+              strings $enc "$f" 2>/dev/null | grep -iE 'oğrula|verif' | sed "s|^|$f :: |"
+            done
+          done | sort -u >> keys.txt
+          cat keys.txt
+
+      - name: Scan binary for the error keys + verification routine
+        run: |
+          echo "=== verification / integrity / tamper strings ===" > hunt.txt
+          strings bin_arm64 | grep -iE 'verif|integrit|tamper|checksum|md5|sha1|sha256|sha-?2|resign|re-sign|codesign|signature|hash mismatch|illegal|modif|pirat|crack' | sort -u | head -200 >> hunt.txt
+          echo "" >> hunt.txt
+          echo "=== anti-debug / self-inspection symbols ===" >> hunt.txt
+          strings bin_arm64 | grep -iE '(^|_)(csops|ptrace|sysctl|task_for_pid|_dyld_image_count|_dyld_get_image_name|_dyld_get_image_header|SecCode|SecStaticCode|SecCodeCheckValidity|getppid|amfi)' | sort -u | head -100 >> hunt.txt
+          echo "" >> hunt.txt
+          echo "=== dyld / LC_ / Mach-O self-parse hints ===" >> hunt.txt
+          strings bin_arm64 | grep -iE 'LC_LOAD|LC_ENCRYPTION|cryptid|mach_header|__LINKEDIT|__TEXT|load command|dyld_shared|executable_path' | sort -u | head -80 >> hunt.txt
+          echo "" >> hunt.txt
+          echo "=== resource download/install verify pipeline ===" >> hunt.txt
+          strings bin_arm64 | grep -iE 'download|install|resource|unzip|verify|valid|check.*(file|zip|hash|sign)' | sort -u | head -150 >> hunt.txt
+          cat hunt.txt
+
+      - name: Grep binary for discovered localization keys
+        run: |
+          echo "=== binary refs to candidate keys ===" > keyrefs.txt
+          # Pull candidate keys (identifier-like tokens) seen near the error value
+          KEYS=$(grep -oE 'KEY=[^ ]+' keys.txt | sed "s/KEY=//; s/['\"]//g" | sort -u)
+          echo "Candidate keys: $KEYS" >> keyrefs.txt
+          for k in $KEYS; do
+            echo "--- $k ---" >> keyrefs.txt
+            strings bin_arm64 | grep -F "$k" | head -10 >> keyrefs.txt
+          done
+          # Also hunt common verify key patterns
+          echo "=== common verify-ish keys in binary ===" >> keyrefs.txt
+          strings bin_arm64 | grep -iE '(verif|valid|integrit|check).*(fail|error|invalid)|(fail|error).*(verif|valid)' | sort -u | head -60 >> keyrefs.txt
+          cat keyrefs.txt
+
+      - name: Upload hunt results
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-hunt
+          path: |
+            keys.txt
+            hunt.txt
+            keyrefs.txt
+          retention-days: 7
